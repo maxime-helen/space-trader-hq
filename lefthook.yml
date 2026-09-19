@@ -1,0 +1,27 @@
+# lefthook.yml
+# Git hooks, installed by `pnpm install` (see the "prepare" script).
+commit-msg:
+  piped: true
+  jobs:
+    - name: commitlint
+      run: pnpm exec commitlint --edit {1}
+    - name: checks
+      group:
+        parallel: true
+        jobs:
+          - name: format
+            run: pnpm format:staged
+          - name: lockfile
+            run: pnpm lockfile:check
+          - name: lint
+            run: pnpm lint
+          - name: typecheck
+            run: pnpm typecheck
+          - name: unit-tests
+            run: pnpm test:unit
+
+pre-push:
+  jobs:
+    - name: branch-name
+      run: pnpm branch:check
+      use_stdin: true
