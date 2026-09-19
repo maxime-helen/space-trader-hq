@@ -1,0 +1,77 @@
+{
+  "name": "spacetradershq",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.12.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc -b",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "format:staged": "bash scripts/check-format.sh",
+    "test": "vitest",
+    "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "api:sync": "bash scripts/api-sync.sh",
+    "api:generate": "openapi-typescript openapi/spacetraders.json -o src/shared/api/schema.d.ts",
+    "api:check": "pnpm api:generate && git diff --exit-code src/shared/api/schema.d.ts",
+    "lockfile:check": "bash scripts/check-lockfile.sh",
+    "branch:check": "bash scripts/check-branch.sh",
+    "history:check": "bash scripts/check-history.sh",
+    "prepare": "lefthook install",
+    "validate": "pnpm lockfile:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm api:check && pnpm build"
+  },
+  "dependencies": {
+    "@tanstack/vue-query": "^5.103.1",
+    "@vueuse/core": "^15.0.0",
+    "openapi-fetch": "^0.17.0",
+    "pinia": "^4.0.3",
+    "vue": "^3.5.42",
+    "vue-router": "^5.3.1"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.1.0",
+    "@commitlint/types": "^20.0.0",
+    "@redocly/cli": "^2.5.0",
+    "@tsconfig/node24": "^24.0.5",
+    "@types/node": "^24.13.4",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vitest/coverage-v8": "^4.1.11",
+    "@vue/eslint-config-prettier": "^10.2.0",
+    "@vue/eslint-config-typescript": "^14.9.0",
+    "@vue/test-utils": "^2.5.0",
+    "@vue/tsconfig": "^0.9.1",
+    "eslint": "^10.10.0",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-boundaries": "^7.2.0",
+    "eslint-plugin-simple-import-sort": "^14.0.0",
+    "eslint-plugin-unicorn": "^61.0.2",
+    "eslint-plugin-vue": "~10.11.0",
+    "jiti": "^2.7.0",
+    "jsdom": "^30.0.1",
+    "lefthook": "^2.1.14",
+    "msw": "^2.15.0",
+    "openapi-typescript": "^7.13.0",
+    "prettier": "3.9.7",
+    "typescript": "~6.0.0",
+    "vite": "^8.2.2",
+    "vite-plugin-vue-devtools": "^8.2.1",
+    "vitest": "^4.1.11",
+    "vue-eslint-parser": "^10.4.1",
+    "vue-tsc": "^3.3.11"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "lefthook"
+    ]
+  }
+}
