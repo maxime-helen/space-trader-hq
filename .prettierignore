@@ -1,0 +1,6 @@
+# Generated or vendored: never hand-formatted
+pnpm-lock.yaml
+openapi/spacetraders.json
+src/shared/api/schema.d.ts
+dist
+coverage
