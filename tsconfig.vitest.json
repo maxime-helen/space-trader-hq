@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.app.json",
+
+  // Override to include only test files and clear exclusions.
+  // Application code imported in tests is automatically included via module resolution.
+  "include": ["src/**/__tests__/*", "vitest.setup.ts", "env.d.ts"],
+  "exclude": [],
+
+  "compilerOptions": {
+    // Vitest runs in a different environment than the application code, but it still runs in
+    // jsdom against the same language level: the scaffold's `"lib": []` left test files without a
+    // standard library at all, so `String.replaceAll` and `Array.at` failed to typecheck in a test
+    // while compiling fine in the code it was testing.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+
+    // `vue-tsc --build` produces a .tsbuildinfo file for incremental type-checking.
+    // Specified here to keep it out of the root directory.
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.vitest.tsbuildinfo"
+  }
+}
