@@ -1,0 +1,160 @@
+# .github/workflows/ci-cd.yml
+name: CI/CD
+
+# Pull requests: run the commit checks, then check that the site builds.
+# Pushes to main (and manual runs from main): same, then deploy to GitHub Pages.
+# Each stage only starts when the previous one succeeded.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  # Superseded pull request runs are cancelled; runs on main never are,
+  # so a deployment is never interrupted halfway.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  commit-checks:
+    name: Commit checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # commitlint needs history to lint a range of commits
+
+      - uses: pnpm/action-setup@v6 # pnpm version read from "packageManager"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # First, before dependencies are installed: the pre-push hook that checks
+      # the branch name can be skipped with --no-verify, so CI is the real gate.
+      - name: Branch name (pull request)
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: pnpm branch:check "$HEAD_REF"
+
+      - name: Lockfile matches package.json
+        run: pnpm lockfile:check # GitHub sets CI=true, so the committed files are checked
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Commit messages (pull request)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: pnpm exec commitlint --from "$BASE_SHA" --to "$HEAD_SHA" --verbose
+
+      - name: Linear history, no fixup commits (pull request)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: pnpm history:check "$BASE_SHA" "$HEAD_SHA"
+
+      - name: Commit messages (push)
+        if: github.event_name == 'push'
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+            pnpm exec commitlint --last --verbose
+          else
+            pnpm exec commitlint --from "$BEFORE_SHA" --to "$GITHUB_SHA" --verbose
+          fi
+
+      - name: Formatting
+        run: pnpm format:check
+
+      - name: API types match the vendored OpenAPI spec
+        run: pnpm api:check # regenerates schema.d.ts and fails if it differs from the committed file
+
+      - name: Lint
+        run: pnpm lint # fails on warnings too (--max-warnings=0)
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests and coverage
+        run: pnpm test:coverage # the same tests as the commit hook, plus the coverage gate
+
+  build:
+    name: Build
+    needs: commit-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve GitHub Pages base path
+        id: base
+        env:
+          OVERRIDE: ${{ vars.PAGES_BASE_PATH }} # optional repository variable, e.g. "/" for a custom domain
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          if [ -n "$OVERRIDE" ]; then
+            base="$OVERRIDE"
+          elif [[ "$REPO" == *.github.io ]]; then
+            base="/"
+          else
+            base="/$REPO/"
+          fi
+          echo "Base path: $base"
+          echo "path=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        env:
+          BASE_PATH: ${{ steps.base.outputs.path }}
+        run: pnpm build --base="$BASE_PATH"
+
+      - name: Check SPA fallback
+        run: cmp dist/index.html dist/404.html
+
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write # create the Pages deployment
+      id-token: write # prove the deployment comes from this workflow and branch
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5
